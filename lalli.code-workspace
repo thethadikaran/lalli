@@ -1,0 +1,26 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+
+  // configurations
+  "settings": {
+    // indentation settings
+    "[json]": {
+      "editor.tabSize": 2,
+    },
+
+    "[c]": {
+      "editor.tabSize": 2,
+    },
+    
+    // dont't show these files in file explorer
+    "files.exclude": {
+      "**/.git": true,
+      "LICENSE": true,
+      ".gitignore": true,
+    }
+  }
+}
