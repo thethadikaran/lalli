@@ -21,6 +21,9 @@
       "**/.git": true,
       "LICENSE": true,
       ".gitignore": true,
+    },
+    "files.associations": {
+      "sdl.h": "c"
     }
   }
 }

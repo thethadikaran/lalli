@@ -1,42 +1,4 @@
-#include <stdio.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdint.h>
-
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_video.h"          // for showing window
-
-#define CHIP8_NATIVE_WIDTH    64    // 32x64 is the native CHIP8 emulator reolution
-#define CHIP8_NATIVE_HEIGHT   32    // so by default we have 64 x 32 pixels
-#define SCALE_FACTOR          20    // after scaling 1280 x 640 pixels
-
-
-/* status of the emulator */
-typedef enum { STOP, RUNNING, PAUSED } emulator_status_t;
-
-/* struct to hold the emulator configurations */
-typedef struct {
-  uint32_t win_width;      // SDL window width
-  uint32_t win_height;     // SDL window height
-  uint32_t scale_factor;   // to scale the win size 
-
-  uint8_t r, b, g, a;      // background color (red, green, blue, alpha)
-} config_t;
-
-
-/* struct to hold the SDL components */
-typedef struct {
-  SDL_Window *win;       // main SDL window pointer
-  SDL_Renderer *render;  // 2D rendering context for a window 
-} sdlc_t;
-
-
-/* struct to hold the emulator state */
-typedef struct {
-  emulator_status_t status;
-} emulator_t;
-
-
+#include "chip8.h"
 
 
 bool sdl_init(sdlc_t *sdlc, const config_t *config) {
@@ -81,7 +43,7 @@ bool set_config_from_args(config_t *config, int argc, char **argv) {
   config->win_height = CHIP8_NATIVE_HEIGHT;   
   config->win_width  = CHIP8_NATIVE_WIDTH;
 
-  config->r = 255;    // inital background color to yellow
+  config->r = 0;    // inital background color to green
   config->g = 255;
   config->b = 0;
   config->a = 0;
@@ -155,7 +117,13 @@ void sdl_free(sdlc_t *sdlc) {
 
 
 bool emulator_init(emulator_t *emulator) {
+  // load font
+
+  // load ROM
+
+  // set chip8 emulator defaults
   emulator->status = RUNNING;    // turn on the emulator
+
   return true;
 }
 
