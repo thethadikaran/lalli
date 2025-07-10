@@ -2,7 +2,7 @@
 
 
 bool sdl_init(sdlc_t *sdlc, const config_t *config) {
-  /* I. initialize SDL subsystems */
+  /* I. initialize SDL subsystems along with audio and video */
   if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO) != 0) {
     SDL_Log("Failed to initialized SDL2 subsystems!!! - %s\n", SDL_GetError());
     return false;
@@ -39,14 +39,23 @@ bool sdl_init(sdlc_t *sdlc, const config_t *config) {
 
 
 bool set_config_from_args(config_t *config, int argc, char **argv) {
-  /* default configurations */
-  config->win_height = CHIP8_NATIVE_HEIGHT;   
-  config->win_width  = CHIP8_NATIVE_WIDTH;
+  // validate input parameter
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <rom_name>\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
 
-  config->r = 0;    // inital background color to green
-  config->g = 255;
+  /* default configurations */
+  config->win_height = SCREEN_HEIGHT;   
+  config->win_width  = SCREEN_WIDTH;
+
+  config->r = 0;    // inital background color to black
   config->b = 0;
+  config->g = 0;
   config->a = 0;
+
+  // udpate the rom file path
+  config->rom = argv[1];
 
   /* override defaults based on CLI arguments */
   (void)argc;  // prevent compiler error for unused variables
@@ -86,18 +95,26 @@ void handle_inputs(emulator_t *emulator) {
       case SDL_QUIT:           // exit the emulator
         emulator->status = STOP;
         return;
-      
+
       case SDL_KEYDOWN:       // keyboard key is pressed
         switch (event.key.keysym.sym) {
-          case SDLK_ESCAPE:   // ESC key is pressed
-            emulator->status = STOP;
+          case SDLK_ESCAPE:               // ESC key is pressed
+            emulator->status = STOP;      // quit the emulator
+            return;
+
+          case SDLK_SPACE:                // SPACE key is pressed
+            // toggle the emulator states
+            emulator->status = emulator->status == RUNNING ? PAUSED : RUNNING;
+
+            if (emulator->status == PAUSED) puts("=== ENTERING DEBUG MODE ===");
+            else puts("=== EXIT DEBUG MODE ===");
             return;
 
           default:
             break;
         }
         break;
-      
+
       case SDL_KEYUP:         // keyboard key is released
         break;
 
@@ -116,15 +133,80 @@ void sdl_free(sdlc_t *sdlc) {
 }
 
 
-bool emulator_init(emulator_t *emulator) {
-  // load font
 
-  // load ROM
+bool emulator_init(emulator_t *emulator, char *rom) {
+  const uint32_t entry_point = 0x200;    // RAM, from 0x00 (0) -> 0x1FF (511) is
+                                         // occupied by the emulator itself.
+                                         // reading of instructions starts from 
+                                         // the next memory location 0x200 (512)
+
+  // clear RAM, stack, display & registors
+  memset(emulator->ram, 0, EMULATOR_RAM * sizeof(uint8_t));
+  memset(emulator->stack, 0, STACK_SIZE * sizeof(uint16_t));
+  memset(emulator->display, 0, SCREEN_HEIGHT * SCREEN_WIDTH);
+  memset(emulator->V, 0, DATA_REGISTER * sizeof(uint8_t));
 
   // set chip8 emulator defaults
   emulator->status = RUNNING;    // turn on the emulator
+  emulator->PC = entry_point;    // start program counter at the RAM's entry point
+  emulator->rom = rom;           // update the ROM file name
+
+  // load fontset in to RAM (at the starting location of RAM)
+  memcpy(emulator->ram, fontset, sizeof(fontset));
+
+  // open the ROM and load the contents into the RAM
+  if (!load_rom(emulator)) return false;
 
   return true;
+}
+
+
+
+/*** UTIL ****/
+bool load_rom(emulator_t *emulator) {
+  // open the ROM
+  FILE *rom = fopen(emulator->rom, "rb");      // reading the binary ROM file
+  if (!rom) {
+    SDL_Log("ROM file \"%s\" is invalid or does not exist", emulator->rom);
+    return false;
+  }
+
+  // calcuate the size of the loaded rom
+  size_t rsize = rom_size(rom);
+
+  // verify if the rom can fit in RAM
+  if (rsize > (sizeof(emulator->ram) - emulator->PC) ) {
+    SDL_Log("Loaded ROM can't fit in to the RAM");
+    fclose(rom);
+    return false;
+  }
+
+  // load the ROM to RAM at the entry point
+  bool status = fread(&emulator->ram[emulator->PC], rsize, 1, rom);
+  if (!status)  {
+    SDL_Log("Cannot load ROM on to the RAM");
+    fclose(rom);
+    return false;
+  }
+
+  // finally close the file
+  fclose(rom);
+  return true;
+}
+
+
+
+size_t rom_size(FILE *rom) {
+  // move the file pointer to the end of the file
+  fseek(rom, 0, SEEK_END);
+
+  // tis position represent the offset in bytes from begining of the file
+  size_t size = ftell(rom);
+
+  // reset the function pointer to the beginning of the file
+  rewind(rom);
+
+  return size;
 }
 
 
@@ -145,7 +227,7 @@ int main(int argc, char *argv[]) {
 
   // III. initialize the emulator machine
   emulator_t emulator = {0};
-  if (!emulator_init(&emulator)) exit(EXIT_FAILURE);
+  if (!emulator_init(&emulator, config.rom)) exit(EXIT_FAILURE);
 
   // IV. clear the screen
   clear_screen(&sdlc, &config);
@@ -154,13 +236,17 @@ int main(int argc, char *argv[]) {
   while (emulator.status != STOP) {
     // handle user inputs (events)
     handle_inputs(&emulator);
+
+    // entering debug mode
+    if (emulator.status == PAUSED) continue;
+
+    // emulate the chip8 instruction
   
     // delay (60Hz or 60FPS)
-    SDL_Delay(16);       // delay in milliseconds
+    SDL_Delay(16);                 // delay in milliseconds
 
     // update the window with the changes
     update_screen(&sdlc);
-    
   }
 
   // VI. cleanup SDL subsystems
